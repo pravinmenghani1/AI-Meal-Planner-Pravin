@@ -2,23 +2,18 @@ import streamlit as st
 import pandas as pd
 import random
 import time
+import boto3
 from data import food_items_breakfast, food_items_lunch, food_items_dinner
 from prompts import pre_prompt_b, pre_prompt_l, pre_prompt_d, pre_breakfast, pre_lunch, pre_dinner, end_text, \
     example_response_l, example_response_d, negative_prompt
-import boto3
 
-# AWS Bedrock API keys (Assume these are stored in Streamlit secrets)
+# Setup AWS Bedrock client
 BEDROCK_API_KEY = st.secrets["bedrock_apikey"]
+AWS_REGION = "us-west-2"  # Change this to your preferred region
+bedrock_client = boto3.client("bedrock", region_name=AWS_REGION)
 
-# Constants for unit conversion
 UNITS_CM_TO_IN = 0.393701
 UNITS_KG_TO_LB = 2.20462
-
-# Set up Bedrock client (AWS SDK)
-bedrock_client = boto3.client(
-    "bedrock", region_name="us-west-2", aws_access_key_id=BEDROCK_API_KEY["access_key"],
-    aws_secret_access_key=BEDROCK_API_KEY["secret_key"]
-)
 
 st.set_page_config(page_title="AI - Meal Planner", page_icon="🍴")
 
@@ -27,7 +22,7 @@ st.divider()
 
 st.write(
     "This is an AI-based meal planner that uses a person's information. The planner can be used to find a meal plan that satisfies the user's calorie and macronutrient requirements.")
-st.markdown("*Powered by Claude*")
+st.markdown("*Powered by Claude Model from Amazon Bedrock*")
 
 st.divider()
 
@@ -57,11 +52,13 @@ else:
 gender = st.radio("Choose your gender:", ["Male", "Female"])
 example_response = f"This is just an example but use your creativity: You can start with, Hello {name}! I'm thrilled to be your meal planner for the day, and I've crafted a delightful and flavorful meal plan just for you. But fear not, this isn't your ordinary, run-of-the-mill meal plan. It's a culinary adventure designed to keep your taste buds excited while considering the calories you can intake. So, get ready!"
 
+
 def calculate_bmr(weight, height, age, gender):
     if gender == "Male":
         bmr = 9.99 * weight + 6.25 * height - 4.92 * age + 5
     else:
         bmr = 9.99 * weight + 6.25 * height - 4.92 * age - 161
+
     return bmr
 
 
@@ -137,9 +134,6 @@ def click_button():
     st.session_state.clicked = True
 
 
-if "claude_model" not in st.session_state:
-    st.session_state["claude_model"] = "claude-v2"  # Assume using Claude v2
-
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -157,11 +151,11 @@ if st.session_state.clicked:
         meal_items_morning, cal_m = generate_items_list(calories_breakfast, food_items_breakfast)
         meal_items_lunch, cal_l = generate_items_list(calories_lunch, food_items_lunch)
         meal_items_dinner, cal_d = generate_items_list(calories_dinner, food_items_dinner)
+
     else:
         meal_items_morning, cal_m = knapsack(int(calories_breakfast), food_items_breakfast)
         meal_items_lunch, cal_l = knapsack(int(calories_lunch), food_items_lunch)
         meal_items_dinner, cal_d = knapsack(int(calories_dinner), food_items_dinner)
-        
     st.header("Your Personalized Meal Plan")
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -184,24 +178,74 @@ if st.session_state.clicked:
         st.subheader("Breakfast")
         user_content = pre_prompt_b + str(meal_items_morning) + example_response + pre_breakfast + negative_prompt
         temp_messages = [{"role": "user", "content": user_content}]
-        with st.chat_message("assistant"):
-            full_response = ""
-            response = bedrock_client.invoke_model(
-                ModelId=st.session_state["claude_model"],
-                Body=str(temp_messages),
-                ContentType="application/json",
-                Accept="application/json"
-            )
-            st.write(response['Body'].read().decode('utf-8'))
-
+        
+        # Call Bedrock API (Claude model)
+        response = bedrock_client.invoke_model(
+            ModelId="claude-v2",  # Or the appropriate Claude model version
+            Body=user_content,
+            ContentType="application/json",
+            Accept="application/json"
+        )
+        
+        st.write(response['Body'].read().decode('utf-8'))
         st.session_state.messages.append(
-            {"role": "assistant", "content": full_response})
+            {"role": "assistant", "content": response['Body'].read().decode('utf-8')}
+        )
 
         st.markdown("""---""")
         st.subheader("Lunch")
         user_content = pre_prompt_l + str(meal_items_lunch) + example_response + pre_lunch + negative_prompt
         temp_messages = [{"role": "user", "content": user_content}]
-        with st.chat_message("assistant"):
-            full_response = ""
-            response = bedrock_client.invoke_model(
-                ModelId=st
+        
+        # Call Bedrock API (Claude model)
+        response = bedrock_client.invoke_model(
+            ModelId="claude-v2",  # Or the appropriate Claude model version
+            Body=user_content,
+            ContentType="application/json",
+            Accept="application/json"
+        )
+        
+        st.write(response['Body'].read().decode('utf-8'))
+        st.session_state.messages.append(
+            {"role": "assistant", "content": response['Body'].read().decode('utf-8')}
+        )
+
+        st.markdown("""---""")
+        st.subheader("Dinner")
+        user_content = pre_prompt_d + str(meal_items_dinner) + example_response + pre_dinner + negative_prompt
+        temp_messages = [{"role": "user", "content": user_content}]
+        
+        # Call Bedrock API (Claude model)
+        response = bedrock_client.invoke_model(
+            ModelId="claude-v2",  # Or the appropriate Claude model version
+            Body=user_content,
+            ContentType="application/json",
+            Accept="application/json"
+        )
+        
+        st.write(response['Body'].read().decode('utf-8'))
+        st.session_state.messages.append(
+            {"role": "assistant", "content": response['Body'].read().decode('utf-8')}
+        )
+        
+        st.write("Thank you for using our AI app! I hope you enjoyed it!")
+
+hide_streamlit_style = """
+                    <style>
+                    # MainMenu {visibility: hidden;}
+                    footer {visibility: hidden;}
+                    footer:after {
+                    content:'Built by Shravan and Team'; 
+                    visibility: visible;
+    	            display: block;
+    	            position: relative;
+    	            # background-color: red;
+    	            padding: 15px;
+    	            top: 2px;
+    	            }
+    	            #ai-meal-planner {
+    	              text-align: center; !important
+        	            }
+                    </style>
+                    """
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
